@@ -6,8 +6,10 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,7 +22,7 @@ import co.edu.unbosque.view.View;
  * @author AndresLinares y SebastianCastañeda
  *
  */
-public class Controller implements ActionListener{
+public class Controller extends Thread implements ActionListener{
 	/**
 	 * atributo para crear la ventana principal
 	 */
@@ -29,28 +31,101 @@ public class Controller implements ActionListener{
 	/**
 	 * atributo para llamar la clase cliente
 	 */
-	private ConexionCliente cc;
+	private Socket socket;
+    private ServerSocket server; 
+    private ObjectOutputStream out;
+    private DataInputStream in; //Input stream from server
+    private String address, line, recibido, guardar;
+    private int port;
+    private Controller c;
 	/**
 	 * Metodo constructor para inicializar las variables
 	 * 
 	 */
-	public Controller() {
-		gui = new View(this);
-		cc = new ConexionCliente("127.0.0.1", 9000);
-		cc.start();
-		gui.setVisible(true);
+	public Controller(String address, int port) {
+		this.socket= null;
+        this.server=null;
+        this.out= null;
+        this.address=address;
+        this.port=port;
+        this.line = "";
+        this.recibido = "";
+        this.guardar = "";
+		this.gui = new View(this);
+		this.gui.setVisible(true);
 		funcionar();
 		
 	}
+public void run() {
+    	
+    	// string to read message from input 
+        this.line = ""; 
+  
+    	// keep reading until "Over" is input 
+        while (!this.line.equals("Over")) 
+        { 
+        	 // establish a connection 
+        	try
+            { 
+        		this.recibido = "";
+        		this.socket = new Socket(this.address, this.port); 
+                System.out.println("Connected"); 
+            
+                // sends output to the socket 
+                this.out = new ObjectOutputStream(socket.getOutputStream()); 
+                while(this.line.equals("")) {
+                	try {
+                        Thread.sleep(100);
+                      } catch (InterruptedException e) {
+                        e.printStackTrace();
+                      }
+                }
+                this.out.writeUTF(this.line);
+                this.line = "";
+                //close socket and output stream
+                this.out.close(); 
+                this.socket.close(); 
+                //Create a serverSocket to wait message from server
+                this.server = new ServerSocket(this.port+1);
+    	        this.socket = server.accept(); 
+    	        System.out.println("Received message: "); 
+    	        // takes input from the client socket 
+    	        this.in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+                //Print in server the client message
+    	        this.recibido = in.readUTF();
+    	        generarAvisos(this.recibido);
+    	        this.guardar = this.recibido;
+                this.in.close();
+                this.server.close();
+            } 
+            catch(IOException i) 
+            { 
+            	System.err.print("Closing conecttion");
+                System.out.println(i); 
+            } 
+        } 
+        // close the connection 
+        try
+        { 
+        	this.out.close(); 
+        	this.socket.close(); 
+        } 
+        catch(IOException i) 
+        { 
+            System.out.println(i); 
+        } 
+    	
+    }
 	/**
 	 * Metodo funcionar, el cual se va a ejecutar automaticamente para darle visibilidad a las ventanas
 	 */
 	public void funcionar() {
 
-		gui.getP1().setVisible(true);
-		gui.getP2().setVisible(false);
-		gui.getP3().setVisible(false);
-		gui.getP4().setVisible(false);
+		this.gui.getP1().setVisible(true);
+		this.gui.getP2().setVisible(false);
+		this.gui.getP3().setVisible(false);
+		this.gui.getP4().setVisible(false);
+		
 	}
 	/**
 	 * Metodo para asignarle funciones a los eventos del programa
@@ -59,52 +134,70 @@ public class Controller implements ActionListener{
 	public void actionPerformed(ActionEvent e) {
 		if(e.getActionCommand().equals(gui.getP1().ENVIAR)) {
 			enviarCandidato();
+			this.guardar = "";
+			limpiarP1();
 		}else if (e.getActionCommand().equals(gui.getP1().BUSCAR)) {
-			gui.getP1().setVisible(false);
-			gui.getP2().setVisible(true);
-			gui.getP3().setVisible(false);
-			gui.getP4().setVisible(false);
+			this.gui.getP1().setVisible(false);
+			this.gui.getP2().setVisible(true);
+			this.gui.getP3().setVisible(false);
+			this.gui.getP4().setVisible(false);
+			this.guardar = "";
 		}else if(e.getActionCommand().equals(gui.getP1().MODIFICAR)) {
-			gui.getP1().setVisible(false);
-			gui.getP2().setVisible(false);
-			gui.getP3().setVisible(true);
-			gui.getP4().setVisible(false);
+			this.gui.getP1().setVisible(false);
+			this.gui.getP2().setVisible(false);
+			this.gui.getP3().setVisible(true);
+			this.gui.getP4().setVisible(false);
+			this.guardar = "";
 		}else if (e.getActionCommand().equals(gui.getP1().ELIMINAR)) {
-			gui.getP1().setVisible(false);
-			gui.getP2().setVisible(false);
-			gui.getP3().setVisible(false);
-			gui.getP4().setVisible(true);
+			this.gui.getP1().setVisible(false);
+			this.gui.getP2().setVisible(false);
+			this.gui.getP3().setVisible(false);
+			this.gui.getP4().setVisible(true);
+			this.guardar = "";
 		}
 		if(e.getActionCommand().equals(gui.getP2().LISTA)) {
 			limpiarP2();
-			cc.setLine("Leer");
-			try {
-	            Thread.sleep(1000);
-	          } catch (InterruptedException esto) {
-	            esto.printStackTrace();
-	          }
-			gui.getP2().getListado().setText(cc.getGuardar());;
+			this.line = "Leer";
+			while(this.guardar.equals("")) {
+				try {
+                    Thread.sleep(100);
+                  } catch (InterruptedException apanasio) {
+                    apanasio.printStackTrace();
+                  }
+			}
+			this.gui.getP2().getListado().setText(this.guardar);
+			while(this.gui.getP2().getListado().getText().equals("")) {
+				this.gui.mostrar("Espere a que cargue profesor");
+			}
+			this.guardar = "";
 			
 		}else if(e.getActionCommand().equals(gui.getP2().ATRAS)) {
 			limpiarP2();
 			volverInscripcion();
+			this.guardar = "";
 		}else if (e.getActionCommand().equals(gui.getP2().BUSCAR01)) {
 			buscar();
+			this.guardar = "";
 		}
 		
 		if(e.getActionCommand().equals(gui.getP3().MODIFICAR01)) {
 			modificarUsuario();
+			this.gui.mostrar(this.guardar);
+			this.guardar = "";
 		}else if (e.getActionCommand().equals(gui.getP3().ATRAS)) {
 			volverInscripcion();
 			limpiarP3();
+			this.guardar = "";
 		}
 		
 		if(e.getActionCommand().equals(gui.getP4().ELIMINAR01)) {
 			borrarUsuario();
 			limpiarP4();
+			this.guardar = "";
 		}else if (e.getActionCommand().equals(gui.getP4().ATRAS)) {
 			limpiarP4();
 			volverInscripcion();
+			this.guardar = "";
 		}
 		
 	}
@@ -208,7 +301,7 @@ public class Controller implements ActionListener{
 			return;
 		}
 	    String enviar_datos = nombre.toUpperCase()+";"+apellido.toUpperCase()+";"+cedula+";"+edad+";"+cargo.toUpperCase();
-	    this.cc.setLine(enviar_datos);
+	    this.line = enviar_datos;
 		
 	}
 	/**
@@ -222,13 +315,14 @@ public class Controller implements ActionListener{
 			this.gui.mostrar("Por favor ingrese una cedula valida");
 			return;
 		}
-		this.cc.setLine("Buscar"+";"+cedula);
+		this.line = "Buscar"+";"+cedula;
 		try {
             Thread.sleep(1000);
           } catch (InterruptedException e) {
             e.printStackTrace();
           }
-		this.gui.getP2().getListado().setText(this.cc.getGuardar());
+		this.gui.getP2().getListado().setText(this.guardar);
+		this.guardar = "";
 	}
 	/**
 	 * Metodo para eliminar un usuario del arraylist con su cedula
@@ -241,7 +335,7 @@ public class Controller implements ActionListener{
 			this.gui.mostrar("Por favor ingrese una cedula valida");
 			return;
 		}
-		this.cc.setLine("Borrar"+";"+cedula);
+		this.line = "Borrar"+";"+cedula;
 	}
 	/**
 	 * Metodo para modificar los valores de un usuario ya existente
@@ -294,8 +388,34 @@ public class Controller implements ActionListener{
 				return;
 			}
 		    String enviar_datos = nombre.toUpperCase()+";"+apellido.toUpperCase()+";"+cedula+";"+edad+";"+cargo.toUpperCase();
-			this.cc.setLine(cedula+"-"+enviar_datos);
+			this.line = cedula+"-"+enviar_datos;
 		}
+	public void generarAvisos(String a) {
+		if(a.equals("YAEXISTELACEDULA")) {
+			this.gui.mostrar("Ya existe esa cedula, intente con otra");
+			
+		}else if(a.equals("USUARIOAGREGADOCORRECTAMENTE")) {
+			this.gui.mostrar("Usuario agregado correctamente");
+			
+		}else if(a.equals("NOSEENCONTRO")){
+			this.gui.mostrar("No se encontró el usuario");
+			
+		}else if(a.equals("USUARIONOREGISTRADO")) {
+			this.gui.mostrar("El usuario ya está registrado");
+			
+		}else if(a.equals("USUARIOBORRADO")) {
+			this.gui.mostrar("El usuario ha sido borrado");
+			
+		}else if(a.equals("USUARIONOBORRADO")) {
+			this.gui.mostrar("El usuario no ha sido borrado");
+			
+		}else if(a.equals("CEDULAINVALIDA")) {
+			this.gui.mostrar("Ingrese una cedula valida");
+			
+		}else if(a.equals("MODIFICADOBIEN")) {
+			this.gui.mostrar("El usuario se modificó correctamente");
+		}
+	}
 	/**
 	 * Metodo que usa como parametro la cedula y con esta hace una busqueda en todo el array
 	 * @param cedula long

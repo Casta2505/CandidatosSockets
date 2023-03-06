@@ -10,6 +10,7 @@ public class AplMain {
 	 * @param args inicia
 	 */
 	public static void main(String[] args) {
-		Controller c = new Controller();
+		Controller c = new Controller("127.0.0.1",9000);
+		c.start();
 	}
 }
